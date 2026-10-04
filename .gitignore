@@ -1,0 +1,31 @@
+# Build output
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Rider
+.idea/
+
+# User-specific files
+*.userprefs
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment / local configuration
+.env
+.env.*
+
+# ASP.NET local development
+appsettings.Local.json
+
+# Publish output
+publish/
