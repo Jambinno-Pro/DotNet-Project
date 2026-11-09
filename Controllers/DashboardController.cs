@@ -47,6 +47,7 @@ public class DashboardController : ControllerBase
             .AsNoTracking()
             .CountAsync();
 
+        // Low stock products
         var lowStockItems = await _context.Products
             .AsNoTracking()
             .Where(product =>
@@ -66,6 +67,12 @@ public class DashboardController : ControllerBase
             })
             .ToListAsync();
 
+        var lowStockProducts = await _context.Products
+            .AsNoTracking()
+            .CountAsync(product =>
+                product.StockQuantity <= product.ReorderLevel);
+
+        // Recent transactions
         var recentTransactions = await _context.StockTransactions
             .AsNoTracking()
             .OrderByDescending(transaction => transaction.CreatedAt)
@@ -82,10 +89,81 @@ public class DashboardController : ControllerBase
             })
             .ToListAsync();
 
-        var lowStockProducts = await _context.Products
+        // Inventory overview
+        // Shows stock movement for the last 7 days.
+        var today = DateTime.UtcNow.Date;
+        var startDate = today.AddDays(-6);
+
+        var inventoryTransactions = await _context.StockTransactions
             .AsNoTracking()
-            .CountAsync(product =>
-                product.StockQuantity <= product.ReorderLevel);
+            .Where(transaction =>
+                transaction.CreatedAt >= startDate &&
+                transaction.CreatedAt < today.AddDays(1))
+            .Select(transaction => new
+            {
+                transaction.CreatedAt,
+                transaction.Type,
+                transaction.Quantity
+            })
+            .ToListAsync();
+
+        var inventoryOverview = Enumerable
+            .Range(0, 7)
+            .Select(offset =>
+            {
+                var date = startDate.AddDays(offset);
+
+                var stockIn = inventoryTransactions
+                    .Where(transaction =>
+                        transaction.CreatedAt.Date == date &&
+                        transaction.Type == "STOCK_IN")
+                    .Sum(transaction => transaction.Quantity);
+
+                var stockOut = inventoryTransactions
+                    .Where(transaction =>
+                        transaction.CreatedAt.Date == date &&
+                        transaction.Type == "STOCK_OUT")
+                    .Sum(transaction => transaction.Quantity);
+
+                return new DashboardInventoryOverviewDto
+                {
+                    Date = date,
+                    StockIn = stockIn,
+                    StockOut = stockOut
+                };
+            })
+            .ToList();
+
+        // Stock by warehouse
+        var warehouseStock = await _context.Warehouses
+            .AsNoTracking()
+            .Select(warehouse => new
+            {
+                warehouse.Id,
+                warehouse.Name,
+                StockQuantity = warehouse.Products
+                    .Sum(product => product.StockQuantity)
+            })
+            .ToListAsync();
+
+        var warehouseTotalStock = warehouseStock
+            .Sum(warehouse => warehouse.StockQuantity);
+
+        var stockByWarehouse = warehouseStock
+            .Select(warehouse => new DashboardWarehouseDto
+            {
+                Id = warehouse.Id,
+                Name = warehouse.Name,
+                StockQuantity = warehouse.StockQuantity,
+                Percentage = warehouseTotalStock > 0
+                    ? Math.Round(
+                        (decimal)warehouse.StockQuantity /
+                        warehouseTotalStock * 100,
+                        2)
+                    : 0
+            })
+            .OrderByDescending(warehouse => warehouse.StockQuantity)
+            .ToList();
 
         var summary = new DashboardSummaryDto
         {
@@ -98,7 +176,9 @@ public class DashboardController : ControllerBase
             TotalTransactions = totalTransactions,
             LowStockProducts = lowStockProducts,
             LowStockItems = lowStockItems,
-            RecentTransactions = recentTransactions
+            RecentTransactions = recentTransactions,
+            InventoryOverview = inventoryOverview,
+            StockByWarehouse = stockByWarehouse
         };
 
         return Ok(summary);

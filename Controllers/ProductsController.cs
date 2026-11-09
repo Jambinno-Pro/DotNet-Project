@@ -1,3 +1,5 @@
+
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using StockFlow.Api.Data;
@@ -6,6 +8,7 @@ using StockFlow.Api.Models;
 
 namespace StockFlow.Api.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class ProductsController : ControllerBase
@@ -18,6 +21,8 @@ public class ProductsController : ControllerBase
     }
 
     // GET: api/products
+    // Public endpoint: does not require a JWT token.
+    [AllowAnonymous]
     [HttpGet]
     public async Task<ActionResult<PagedResultDto<ProductDto>>> GetProducts(
         [FromQuery] string? search,
@@ -53,7 +58,7 @@ public class ProductsController : ControllerBase
             .Include(p => p.WarehouseNavigation)
             .AsQueryable();
 
-        // Search by product name or SKU
+        // Search by product name or SKU.
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
@@ -63,35 +68,35 @@ public class ProductsController : ControllerBase
                 p.SKU.Contains(term));
         }
 
-        // Filter by category
+        // Filter by category.
         if (categoryId.HasValue)
         {
             query = query.Where(p =>
                 p.CategoryId == categoryId.Value);
         }
 
-        // Filter by supplier
+        // Filter by supplier.
         if (supplierId.HasValue)
         {
             query = query.Where(p =>
                 p.SupplierId == supplierId.Value);
         }
 
-        // Filter by warehouse
+        // Filter by warehouse.
         if (warehouseId.HasValue)
         {
             query = query.Where(p =>
                 p.WarehouseId == warehouseId.Value);
         }
 
-        // Filter low-stock products
+        // Filter low-stock products.
         if (lowStock == true)
         {
             query = query.Where(p =>
                 p.StockQuantity <= p.ReorderLevel);
         }
 
-        // Validate sorting
+        // Validate sorting.
         var allowedSortFields = new[]
         {
             "name",
@@ -119,13 +124,13 @@ public class ProductsController : ControllerBase
             });
         }
 
-        // Count filtered products before pagination
+        // Count filtered products before pagination.
         var totalItems = await query.CountAsync();
 
         var totalPages = (int)Math.Ceiling(
             totalItems / (double)pageSize);
 
-        // Apply sorting
+        // Apply sorting.
         query = sortBy switch
         {
             "price" => sortOrder == "asc"
@@ -145,7 +150,7 @@ public class ProductsController : ControllerBase
                 : query.OrderByDescending(p => p.Name)
         };
 
-        // Apply pagination
+        // Apply pagination and map to DTOs.
         var products = await query
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -188,6 +193,8 @@ public class ProductsController : ControllerBase
     }
 
     // GET: api/products/1
+    // Public endpoint: does not require a JWT token.
+    [AllowAnonymous]
     [HttpGet("{id}")]
     public async Task<ActionResult<ProductDto>> GetProduct(int id)
     {
@@ -232,14 +239,15 @@ public class ProductsController : ControllerBase
     }
 
     // POST: api/products
+    // Requires authentication.
     [HttpPost]
     public async Task<ActionResult<ProductDto>> CreateProduct(
-        CreateProductDto dto)
+        [FromBody] CreateProductDto dto)
     {
         var name = dto.Name.Trim();
         var sku = dto.SKU.Trim().ToUpperInvariant();
 
-        // Check duplicate SKU
+        // Check for duplicate SKU.
         if (await _context.Products.AnyAsync(p => p.SKU == sku))
         {
             return Conflict(new
@@ -248,7 +256,7 @@ public class ProductsController : ControllerBase
             });
         }
 
-        // Check category
+        // Check category.
         if (!await _context.Categories.AnyAsync(c =>
             c.Id == dto.CategoryId))
         {
@@ -258,7 +266,7 @@ public class ProductsController : ControllerBase
             });
         }
 
-        // Check supplier
+        // Check supplier.
         if (dto.SupplierId.HasValue &&
             !await _context.Suppliers.AnyAsync(s =>
                 s.Id == dto.SupplierId.Value))
@@ -269,7 +277,7 @@ public class ProductsController : ControllerBase
             });
         }
 
-        // Check warehouse
+        // Check warehouse.
         if (dto.WarehouseId.HasValue &&
             !await _context.Warehouses.AnyAsync(w =>
                 w.Id == dto.WarehouseId.Value))
@@ -297,7 +305,7 @@ public class ProductsController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        // Load related data for response
+        // Load related data for the response.
         var result = await _context.Products
             .AsNoTracking()
             .Include(p => p.CategoryNavigation)
@@ -337,10 +345,11 @@ public class ProductsController : ControllerBase
     }
 
     // PUT: api/products/1
+    // Requires authentication.
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateProduct(
         int id,
-        UpdateProductDto dto)
+        [FromBody] UpdateProductDto dto)
     {
         var product = await _context.Products.FindAsync(id);
 
@@ -352,7 +361,7 @@ public class ProductsController : ControllerBase
         var name = dto.Name.Trim();
         var sku = dto.SKU.Trim().ToUpperInvariant();
 
-        // Check duplicate SKU
+        // Check for duplicate SKU.
         if (await _context.Products.AnyAsync(p =>
             p.SKU == sku && p.Id != id))
         {
@@ -362,7 +371,7 @@ public class ProductsController : ControllerBase
             });
         }
 
-        // Check category
+        // Check category.
         if (!await _context.Categories.AnyAsync(c =>
             c.Id == dto.CategoryId))
         {
@@ -372,7 +381,7 @@ public class ProductsController : ControllerBase
             });
         }
 
-        // Check supplier
+        // Check supplier.
         if (dto.SupplierId.HasValue &&
             !await _context.Suppliers.AnyAsync(s =>
                 s.Id == dto.SupplierId.Value))
@@ -383,7 +392,7 @@ public class ProductsController : ControllerBase
             });
         }
 
-        // Check warehouse
+        // Check warehouse.
         if (dto.WarehouseId.HasValue &&
             !await _context.Warehouses.AnyAsync(w =>
                 w.Id == dto.WarehouseId.Value))
@@ -409,6 +418,7 @@ public class ProductsController : ControllerBase
     }
 
     // DELETE: api/products/1
+    // Requires authentication.
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteProduct(int id)
     {
@@ -420,7 +430,7 @@ public class ProductsController : ControllerBase
             return NotFound();
         }
 
-        // Prevent deleting products with transaction history
+        // Prevent deleting products with transaction history.
         var hasTransactions = await _context.StockTransactions
             .AnyAsync(t => t.ProductId == id);
 

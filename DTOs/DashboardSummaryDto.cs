@@ -23,4 +23,10 @@ public class DashboardSummaryDto
 
     public IEnumerable<DashboardTransactionDto> RecentTransactions { get; set; }
         = [];
+
+    public IEnumerable<DashboardInventoryOverviewDto> InventoryOverview { get; set; }
+    = [];
+
+    public IEnumerable<DashboardWarehouseDto> StockByWarehouse { get; set; }
+    = [];    
 }

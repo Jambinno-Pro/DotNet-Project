@@ -1,9 +1,10 @@
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using StockFlow.Api.Models;
 
 namespace StockFlow.Api.Data;
 
-public class StockFlowDbContext : DbContext
+public class StockFlowDbContext : IdentityDbContext<ApplicationUser>
 {
     public StockFlowDbContext(DbContextOptions<StockFlowDbContext> options)
         : base(options)
@@ -15,6 +16,11 @@ public class StockFlowDbContext : DbContext
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<Warehouse> Warehouses => Set<Warehouse>();
     public DbSet<StockTransaction> StockTransactions => Set<StockTransaction>();
+    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<Customer> Customers => Set<Customer>();
+
+    public DbSet<AppSetting> AppSettings { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -97,6 +103,64 @@ public class StockFlowDbContext : DbContext
 
             entity.HasIndex(t => t.CreatedAt)
                 .HasDatabaseName("IX_StockTransactions_CreatedAt");
+        });
+
+        // Order
+        modelBuilder.Entity<Order>(entity =>
+        {
+            entity.HasIndex(o => o.OrderNumber)
+                .HasDatabaseName("IX_Orders_OrderNumber")
+                .IsUnique();
+
+            entity.Property(o => o.OrderNumber)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(o => o.CustomerName)
+                .HasMaxLength(200);
+
+            entity.Property(o => o.Status)
+                .HasMaxLength(30)
+                .IsRequired();
+
+            entity.Property(o => o.TotalAmount)
+                .HasPrecision(18, 2);
+
+            entity.Property(o => o.Notes)
+                .HasMaxLength(500);
+
+            // Customer relationship
+            entity.HasOne(o => o.Customer)
+                .WithMany(c => c.Orders)
+                .HasForeignKey(o => o.CustomerId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Order Item
+        modelBuilder.Entity<OrderItem>(entity =>
+        {
+            entity.HasOne(item => item.Order)
+                .WithMany(order => order.Items)
+                .HasForeignKey(item => item.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(item => item.Product)
+                .WithMany()
+                .HasForeignKey(item => item.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.Property(item => item.UnitPrice)
+                .HasPrecision(18, 2);
+
+            entity.Property(item => item.LineTotal)
+                .HasPrecision(18, 2);
+
+            entity.HasIndex(item => item.OrderId)
+                .HasDatabaseName("IX_OrderItems_OrderId");
+
+            entity.HasIndex(item => item.ProductId)
+                .HasDatabaseName("IX_OrderItems_ProductId");
         });
     }
 }
